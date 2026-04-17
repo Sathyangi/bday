@@ -1,0 +1,271 @@
+<h2 class="sr-only">Bubu's Birthday Maze</h2>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');
+
+* { box-sizing: border-box; }
+
+body{
+  margin:0;
+  background:#f5f3ff;
+  display:flex;
+  justify-content:center;
+}
+
+#maze-wrapper {
+  font-family: 'Nunito', sans-serif;
+  text-align:center;
+  width:100%;
+  max-width:420px;
+}
+
+.moves-badge{
+  margin:10px;
+  font-weight:800;
+}
+
+.maze-container {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 3px solid #6d5bd0;
+}
+
+#maze{
+  background:#e9e7f5;
+  width:100%;
+  height:auto;
+}
+
+/* 🎮 CONTROLS */
+.dpad {
+  margin-top:15px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:5px;
+}
+
+.dpad-row {
+  display:flex;
+  gap:5px;
+}
+
+.ctrl-btn {
+  width:60px;
+  height:60px;
+  font-size:22px;
+  border-radius:12px;
+  border:none;
+  background:#6d5bd0;
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.ctrl-btn:active{
+  transform:scale(0.95);
+}
+
+/* 🎉 WIN */
+#win-overlay {
+  position: absolute;
+  inset: 0;
+  background: white;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#bday-video {
+  display: none;
+  width: 90%;
+  max-height: 250px;
+  margin-top:10px;
+  border-radius:10px;
+}
+
+/* 📱 MOBILE */
+@media(max-width:480px){
+  .ctrl-btn{
+    width:55px;
+    height:55px;
+    font-size:20px;
+  }
+}
+</style>
+
+<div id="maze-wrapper">
+
+  <h1>Find Your Gift 🎀</h1>
+
+  <div class="moves-badge">
+    Moves: <span id="move-count">0</span>
+  </div>
+
+  <div class="maze-container">
+    <canvas id="maze"></canvas>
+
+    <div id="win-overlay">
+      <h2>Happy Birthday Bubu 🎂</h2>
+
+      <p style="font-weight:800;color:#6d5bd0;">
+        Happy Bday Bubu, here is your surprise 🎉
+      </p>
+
+      <video id="bday-video" controls muted playsinline>
+        <source src="bday video.mp4" type="video/mp4">
+      </video>
+
+      <button onclick="resetGame()">Play Again</button>
+    </div>
+  </div>
+
+  <!-- 🎮 ARROW CONTROLS -->
+  <div class="dpad">
+    <button class="ctrl-btn" onclick="tryMove(-1,0)">↑</button>
+    <div class="dpad-row">
+      <button class="ctrl-btn" onclick="tryMove(0,-1)">←</button>
+      <button class="ctrl-btn" onclick="tryMove(1,0)">↓</button>
+      <button class="ctrl-btn" onclick="tryMove(0,1)">→</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const COLS=13, ROWS=11, CELL=40;
+const W=COLS*CELL, H=ROWS*CELL;
+const DR=[-1,0,1,0], DC=[0,1,0,-1];
+
+let cells=[], player={r:0,c:0}, moves=0, won=false;
+
+function initMaze(){
+  cells=[];
+  for(let r=0;r<ROWS;r++){
+    cells[r]=[];
+    for(let c=0;c<COLS;c++) cells[r][c]={walls:[1,1,1,1],visited:false};
+  }
+
+  const stack=[[0,0]];
+  cells[0][0].visited=true;
+
+  while(stack.length){
+    const [r,c]=stack[stack.length-1];
+
+    const dirs=[0,1,2,3].filter(d=>{
+      const nr=r+DR[d],nc=c+DC[d];
+      return nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!cells[nr][nc].visited;
+    });
+
+    if(!dirs.length){stack.pop();continue;}
+
+    const d=dirs[Math.floor(Math.random()*dirs.length)];
+    const nr=r+DR[d],nc=c+DC[d];
+
+    cells[r][c].walls[d]=0;
+    cells[nr][nc].walls[(d+2)%4]=0;
+
+    cells[nr][nc].visited=true;
+    stack.push([nr,nc]);
+  }
+}
+
+function draw(){
+  const ctx=maze.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const x=c*CELL, y=r*CELL;
+      const w=cells[r][c].walls;
+
+      ctx.strokeStyle="#6d5bd0";
+      ctx.lineWidth=3;
+
+      if(w[0]){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+CELL,y);ctx.stroke();}
+      if(w[1]){ctx.beginPath();ctx.moveTo(x+CELL,y);ctx.lineTo(x+CELL,y+CELL);ctx.stroke();}
+      if(w[2]){ctx.beginPath();ctx.moveTo(x,y+CELL);ctx.lineTo(x+CELL,y+CELL);ctx.stroke();}
+      if(w[3]){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+CELL);ctx.stroke();}
+    }
+  }
+
+  ctx.font="28px serif";
+  ctx.fillText("🎁",(COLS-1)*CELL+8,(ROWS-1)*CELL+30);
+
+  ctx.beginPath();
+  ctx.arc(player.c*CELL+20,player.r*CELL+20,10,0,Math.PI*2);
+  ctx.fillStyle="#6d5bd0";
+  ctx.fill();
+}
+
+function tryMove(dr,dc){
+  if(won) return;
+
+  let dir=dr===-1?0:dc===1?1:dr===1?2:3;
+
+  if(!cells[player.r][player.c].walls[dir]){
+    player.r+=dr;
+    player.c+=dc;
+    moves++;
+    document.getElementById('move-count').textContent=moves;
+    draw();
+
+    if(player.r===ROWS-1 && player.c===COLS-1){
+      won=true;
+      setTimeout(showWin,300);
+    }
+  }
+}
+
+function showWin(){
+  const ov=document.getElementById('win-overlay');
+  ov.style.display='flex';
+
+  const vid=document.getElementById('bday-video');
+  vid.style.display='block';
+
+  setTimeout(()=>{
+    vid.play().catch(()=>{});
+  },500);
+}
+
+function resetGame(){
+  player={r:0,c:0};
+  moves=0;
+  won=false;
+
+  document.getElementById('move-count').textContent=0;
+  document.getElementById('win-overlay').style.display='none';
+
+  const vid=document.getElementById('bday-video');
+  vid.pause();
+  vid.currentTime=0;
+  vid.style.display='none';
+
+  initMaze();
+  draw();
+}
+
+document.addEventListener('keydown',e=>{
+  const map={
+    ArrowUp:[-1,0],
+    ArrowDown:[1,0],
+    ArrowLeft:[0,-1],
+    ArrowRight:[0,1]
+  };
+
+  if(map[e.key]){
+    e.preventDefault();
+    tryMove(...map[e.key]);
+  }
+});
+
+const maze=document.getElementById('maze');
+maze.width=W;
+maze.height=H;
+
+initMaze();
+draw();
+</script>
